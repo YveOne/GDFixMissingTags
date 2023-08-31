@@ -108,12 +108,7 @@ namespace GDFixMissingTags
                     ZipFile.CreateFromDirectory(lData.Value.OutDirPath, outZip);
                 }
             }
-            foreach (var zip in args)
-            {
-                var fileNameNoExt = Path.GetFileNameWithoutExtension(zip);
-                var extractPath = Path.Combine(tmpPath, fileNameNoExt);
-                Directory.Delete(extractPath, true);
-            }
+            Directory.Delete(tmpPath, true);
             Exit("Done");
         }
 
