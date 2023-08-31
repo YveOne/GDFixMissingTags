@@ -1,0 +1,5 @@
+
+v1.0.2
+- When tags_missing.txt already exists append lines instead of overwriting the file
+- Added support for multiple Text_EN files beeing dropped
+- Temporary extracted files will be deleted from temp directory before finishing

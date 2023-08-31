@@ -40,7 +40,9 @@ namespace GDFixMissingTags
             {
                 if (!File.Exists(file))
                     Exit($"File '{file}' not found");
-                if (Path.GetFileNameWithoutExtension(file) == masterFileName)
+                if (Path.GetExtension(file) != ".zip")
+                    Exit($"File '{file}' is not a zip");
+                if (Path.GetFileNameWithoutExtension(file).ToLower().Contains("text_en"))
                     masterFileFound = true;
             }
             if (!masterFileFound)
@@ -49,15 +51,11 @@ namespace GDFixMissingTags
             string tmpPath = Path.GetTempPath() + Guid.NewGuid();
             Directory.CreateDirectory(tmpPath);
 
+            var masterTags = new Dictionary<string, string>();
             var dataList = new Dictionary<string, LocaleData>();
 
             foreach (var zip in args)
             {
-                if (Path.GetExtension(zip) != ".zip")
-                {
-                    Console.WriteLine($"Skipping '{zip}' - not a zip");
-                    continue;
-                }
 
                 var fileNameNoExt = Path.GetFileNameWithoutExtension(zip);
                 var extractPath = Path.Combine(tmpPath, fileNameNoExt);
@@ -65,44 +63,35 @@ namespace GDFixMissingTags
                 ZipFile.ExtractToDirectory(zip, extractPath);
                 Console.WriteLine($"Reading tags: {fileNameNoExt}");
 
-                dataList[fileNameNoExt] = new LocaleData {
-                    InFilePath = zip,
-                    OutDirPath = extractPath,
-                    Tags = new Dictionary<string, string>(),
-                    MissingTags = new Dictionary<string, string>(),
-                };
-
-                foreach (var file in Directory.GetFiles(extractPath, "tags_*.txt"))
+                if (fileNameNoExt.ToLower().Contains("text_en"))
                 {
-                    foreach(var line in File.ReadAllLines(file))
+                    foreach (var kvp in ReadTags(extractPath))
+                        masterTags[kvp.Key] = kvp.Value;
+                }
+                else
+                {
+                    dataList[fileNameNoExt] = new LocaleData
                     {
-                        var lineSplit = line.Split('=').ToList();
-                        if (lineSplit.Count < 2)
-                            continue;
-                        var key = lineSplit[0].Trim();
-                        lineSplit.RemoveAt(0);
-                        var value = string.Join("=", lineSplit).Trim();
-                        if (key.StartsWith("#"))
-                            continue;
-                        dataList[fileNameNoExt].Tags[key] = value;
-                    }
+                        InFilePath = zip,
+                        OutDirPath = extractPath,
+                        Tags = ReadTags(extractPath),
+                        MissingTags = new Dictionary<string, string>(),
+                    };
                 }
             }
 
-            if (!dataList.ContainsKey(masterFileName))
-            {
-                Exit("Master file name not found in data list");
-            }
+            if (masterTags.Count() == 0)
+                Exit("No master tags found");
 
             foreach(var lData in dataList)
             {
-                if (lData.Key == masterFileName)
-                    continue;
-                foreach (var masterTagKVP in dataList[masterFileName].Tags)
+
+                foreach (var masterTagKVP in masterTags)
                 {
                     if (!lData.Value.Tags.ContainsKey(masterTagKVP.Key))
-                        lData.Value.MissingTags.Add(masterTagKVP.Key, masterTagKVP.Value);
+                        lData.Value.MissingTags[masterTagKVP.Key] = masterTagKVP.Value;
                 }
+
                 if (lData.Value.MissingTags.Count > 0)
                 {
                     Console.WriteLine($"Writing: {lData.Key}");
@@ -111,19 +100,44 @@ namespace GDFixMissingTags
                     {
                         lines.Add($"{kvp.Key}={kvp.Value}");
                     }
-                    File.WriteAllLines(Path.Combine(lData.Value.OutDirPath, "tags_missing.txt"), lines);
+                    var tagsMissingTxt = Path.Combine(lData.Value.OutDirPath, "tags_missing.txt");
+                    File.AppendAllLines(tagsMissingTxt, lines);
                     var outZip = Path.Combine(lData.Value.InFilePath);
                     if (File.Exists(outZip))
                         File.Delete(outZip);
                     ZipFile.CreateFromDirectory(lData.Value.OutDirPath, outZip);
                 }
             }
-            
+            foreach (var zip in args)
+            {
+                var fileNameNoExt = Path.GetFileNameWithoutExtension(zip);
+                var extractPath = Path.Combine(tmpPath, fileNameNoExt);
+                Directory.Delete(extractPath, true);
+            }
             Exit("Done");
         }
 
+        private static Dictionary<string, string> ReadTags(string dirPath)
+        {
+            var tags = new Dictionary<string, string>();
+            foreach (var file in Directory.GetFiles(dirPath, "tags*.txt", SearchOption.AllDirectories))
+            {
+                foreach (var line in File.ReadAllLines(file))
+                {
+                    var lineSplit = line.Split('=').ToList();
+                    if (lineSplit.Count < 2)
+                        continue;
+                    var key = lineSplit[0].Trim();
+                    lineSplit.RemoveAt(0);
+                    var value = string.Join("=", lineSplit).Trim();
+                    if (key.StartsWith("#"))
+                        continue;
+                    tags[key] = value;
+                }
+            }
 
-
+            return tags;
+        }
 
     }
 }
