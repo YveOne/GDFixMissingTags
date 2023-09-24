@@ -1,4 +1,7 @@
 
+v1.0.3
+- Tool does now sleep for 5 seconds instead of waiting for user input when an error occurs
+
 v1.0.2
 - When tags_missing.txt already exists append lines instead of overwriting the file
 - Added support for multiple Text_EN files beeing dropped

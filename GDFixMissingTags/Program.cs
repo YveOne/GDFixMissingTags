@@ -7,19 +7,25 @@ using System.IO;
 using System.IO.Compression;
 using System.Windows.Forms;
 
+using Utils;
+
 namespace GDFixMissingTags
 {
     internal class Program
     {
+
+        #region common stuff
 
         private static readonly string CWD = Application.StartupPath;
 
         private static void Exit(string msg, int errCode = 0)
         {
             Console.WriteLine(msg);
-            Console.ReadLine();
+            System.Threading.Thread.Sleep(5000);
             Environment.Exit(errCode);
         }
+
+        #endregion
 
         private struct LocaleData
         {
@@ -48,7 +54,7 @@ namespace GDFixMissingTags
             if (!masterFileFound)
                 Exit("Text_EN.zip not included");
 
-            string tmpPath = Path.GetTempPath() + Guid.NewGuid();
+            string tmpPath = Funcs.GetTempFileName();
             Directory.CreateDirectory(tmpPath);
 
             var masterTags = new Dictionary<string, string>();
@@ -56,7 +62,6 @@ namespace GDFixMissingTags
 
             foreach (var zip in args)
             {
-
                 var fileNameNoExt = Path.GetFileNameWithoutExtension(zip);
                 var extractPath = Path.Combine(tmpPath, fileNameNoExt);
                 Console.WriteLine($"Extracting: {fileNameNoExt}");
@@ -65,7 +70,7 @@ namespace GDFixMissingTags
 
                 if (fileNameNoExt.ToLower().Contains("text_en"))
                 {
-                    foreach (var kvp in ReadTags(extractPath))
+                    foreach (var kvp in ReadDictFromDirectory(extractPath))
                         masterTags[kvp.Key] = kvp.Value;
                 }
                 else
@@ -74,7 +79,7 @@ namespace GDFixMissingTags
                     {
                         InFilePath = zip,
                         OutDirPath = extractPath,
-                        Tags = ReadTags(extractPath),
+                        Tags = ReadDictFromDirectory(extractPath),
                         MissingTags = new Dictionary<string, string>(),
                     };
                 }
@@ -85,21 +90,16 @@ namespace GDFixMissingTags
 
             foreach(var lData in dataList)
             {
-
                 foreach (var masterTagKVP in masterTags)
-                {
                     if (!lData.Value.Tags.ContainsKey(masterTagKVP.Key))
                         lData.Value.MissingTags[masterTagKVP.Key] = masterTagKVP.Value;
-                }
 
                 if (lData.Value.MissingTags.Count > 0)
                 {
                     Console.WriteLine($"Writing: {lData.Key}");
                     var lines = new List<string>();
                     foreach(var kvp in lData.Value.MissingTags)
-                    {
                         lines.Add($"{kvp.Key}={kvp.Value}");
-                    }
                     var tagsMissingTxt = Path.Combine(lData.Value.OutDirPath, "tags_missing.txt");
                     File.AppendAllLines(tagsMissingTxt, lines);
                     var outZip = Path.Combine(lData.Value.InFilePath);
@@ -112,26 +112,15 @@ namespace GDFixMissingTags
             Exit("Done");
         }
 
-        private static Dictionary<string, string> ReadTags(string dirPath)
+        private static Dictionary<string, string> ReadDictFromDirectory(string dirPath)
         {
-            var tags = new Dictionary<string, string>();
+            var dict = new Dictionary<string, string>();
             foreach (var file in Directory.GetFiles(dirPath, "tags*.txt", SearchOption.AllDirectories))
             {
-                foreach (var line in File.ReadAllLines(file))
-                {
-                    var lineSplit = line.Split('=').ToList();
-                    if (lineSplit.Count < 2)
-                        continue;
-                    var key = lineSplit[0].Trim();
-                    lineSplit.RemoveAt(0);
-                    var value = string.Join("=", lineSplit).Trim();
-                    if (key.StartsWith("#"))
-                        continue;
-                    tags[key] = value;
-                }
+                foreach(var kvp in Funcs.ReadDictionaryFromFile(file))
+                    dict[kvp.Key] = kvp.Value;
             }
-
-            return tags;
+            return dict;
         }
 
     }
